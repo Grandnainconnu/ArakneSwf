@@ -113,6 +113,12 @@ final readonly class TimelineProcessor
          */
         $frames = [];
 
+        /**
+         * Current frame index (0-based)
+         * @var non-negative-int
+         */
+        $currentFrameIndex = 0;
+
         $empty = true;
 
         // Bounds of the sprite
@@ -138,6 +144,7 @@ final readonly class TimelineProcessor
                 );
                 $actions = [];
                 $frameLabel = null;
+                $currentFrameIndex++;
                 continue;
             }
 
@@ -190,7 +197,7 @@ final readonly class TimelineProcessor
             // @todo handle PlaceObject3Tag::className if present
             if ($isNewObject) {
                 // New character at the given depth
-                $objectProperties = $this->placeNewObject($frameDisplayTag);
+                $objectProperties = $this->placeNewObject($frameDisplayTag, $currentFrameIndex);
             } else {
                 // Modify the character at the given depth
                 $objectProperties = $objectsByDepth[$frameDisplayTag->depth] ?? null;
@@ -206,7 +213,7 @@ final readonly class TimelineProcessor
                 }
 
                 assert(!$frameDisplayTag instanceof PlaceObjectTag); // Modify is not possible with PlaceObjectTag
-                $objectProperties = $this->modifyObject($frameDisplayTag, $objectProperties);
+                $objectProperties = $this->modifyObject($frameDisplayTag, $objectProperties, $currentFrameIndex);
             }
 
             $objectsByDepth[$frameDisplayTag->depth] = $objectProperties;
@@ -276,11 +283,12 @@ final readonly class TimelineProcessor
      * Handle display of a new object
      *
      * @param PlaceObjectTag|PlaceObject2Tag|PlaceObject3Tag $tag
+     * @param non-negative-int $currentFrameIndex The current frame index when this object is placed
      *
      * @return FrameObject
      * @throws SwfExceptionInterface
      */
-    private function placeNewObject(PlaceObjectTag|PlaceObject2Tag|PlaceObject3Tag $tag): FrameObject
+    private function placeNewObject(PlaceObjectTag|PlaceObject2Tag|PlaceObject3Tag $tag, int $currentFrameIndex): FrameObject
     {
         assert($tag->characterId !== null);
         $object = $this->extractor->character($tag->characterId);
@@ -310,6 +318,7 @@ final readonly class TimelineProcessor
             filters: $tag->surfaceFilterList ?? [],
             blendMode: BlendMode::tryFrom($tag->blendMode ?? 1) ?? BlendMode::Normal,
             ratio: $tag->ratio ?? null,
+            startFrame: $currentFrameIndex,
         );
     }
 
@@ -318,14 +327,16 @@ final readonly class TimelineProcessor
      *
      * @param PlaceObject2Tag|PlaceObject3Tag $tag
      * @param FrameObject $objectProperties
+     * @param non-negative-int $currentFrameIndex The current frame index
      *
      * @return FrameObject
      * @throws SwfExceptionInterface
      */
-    private function modifyObject(PlaceObject2Tag|PlaceObject3Tag $tag, FrameObject $objectProperties): FrameObject
+    private function modifyObject(PlaceObject2Tag|PlaceObject3Tag $tag, FrameObject $objectProperties, int $currentFrameIndex): FrameObject
     {
         if ($tag->characterId !== null) {
             // New object to display, so we need to modify the bounds and matrix according to the new object bounds
+            // Also reset the start frame since this is a new character
             $oldObjectBounds = $objectProperties->object->bounds();
             $newObject = $this->extractor->character($tag->characterId);
             $matrix = $tag->matrix ?? $objectProperties->matrix->translate(-$oldObjectBounds->xmin, -$oldObjectBounds->ymin);
@@ -336,6 +347,7 @@ final readonly class TimelineProcessor
                 object: $newObject,
                 bounds: $newObjectBounds->transform($matrix),
                 matrix: $matrix->translate($newObjectBounds->xmin, $newObjectBounds->ymin),
+                startFrame: $currentFrameIndex,
             );
         } elseif ($tag->matrix) {
             $currentObjectBounds = $objectProperties->object->bounds();

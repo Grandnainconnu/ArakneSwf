@@ -109,6 +109,14 @@ final readonly class FrameObject
         public ?int $ratio = null,
 
         /**
+         * The frame number when this object was first placed on the display list.
+         * Used to compute the relative frame for nested sprite animations.
+         *
+         * @var non-negative-int
+         */
+        public int $startFrame = 0,
+
+        /**
          * Color transformations to apply to the object
          *
          * This property is fill by the `transformColors()` method,
@@ -173,6 +181,7 @@ final readonly class FrameObject
             $this->filters,
             $this->blendMode,
             $this->ratio,
+            $this->startFrame,
             [...$this->colorTransforms, $colorTransform],
         );
     }
@@ -190,6 +199,7 @@ final readonly class FrameObject
      * @param int|null $clipDepth
      * @param string|null $name
      * @param int|null $ratio
+     * @param int|null $startFrame
      *
      * @return self
      */
@@ -204,6 +214,7 @@ final readonly class FrameObject
         ?int $clipDepth = null,
         ?string $name = null,
         ?int $ratio = null,
+        ?int $startFrame = null,
     ): self {
         // When a new character ID is provided, a new object must be provided too
         assert($characterId === null || $object !== null);
@@ -220,7 +231,35 @@ final readonly class FrameObject
             $filters ?? $this->filters,
             $blendMode ?? $this->blendMode,
             $ratio ?? $this->ratio,
+            $startFrame ?? $this->startFrame,
             $this->colorTransforms,
         );
+    }
+
+    /**
+     * Compute the relative frame for this object based on the global frame.
+     *
+     * Nested sprites sync to the global timeline time, using modulo to determine
+     * their current frame. This matches JPEXS/Flash Player behavior where
+     * nested sprites advance based on global time, not from when they were placed.
+     *
+     * This approach ensures perfect looping: when the parent timeline loops
+     * from frame N-1 back to frame 0, nested sprites also loop back correctly
+     * because (N % nestedFrameCount) cycles back to (0 % nestedFrameCount) = 0
+     * when N is a multiple of nestedFrameCount.
+     *
+     * @param int $globalFrame The current global frame number
+     * @return int The relative frame number for this object's sprite
+     */
+    public function computeRelativeFrame(int $globalFrame): int
+    {
+        $objectFrameCount = $this->object->framesCount(false);
+
+        if ($objectFrameCount <= 1) {
+            return 0;
+        }
+
+        // Use global frame directly with modulo, matching JPEXS behavior
+        return $globalFrame % $objectFrameCount;
     }
 }

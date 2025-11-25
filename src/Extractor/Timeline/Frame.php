@@ -100,8 +100,11 @@ final readonly class Frame implements DrawableInterface
         $activeClips = [];
 
         foreach ($this->objects as $object) {
+            // Compute the relative frame for this object's nested sprite animation
+            $relativeFrame = $object->computeRelativeFrame($frame);
+
             if ($object->clipDepth !== null) {
-                $id = $drawer->startClip($object->object, $object->matrix, $frame);
+                $id = $drawer->startClip($object->object, $object->matrix, $relativeFrame);
                 $activeClips[$id] = $object->clipDepth;
 
                 continue;
@@ -117,7 +120,7 @@ final readonly class Frame implements DrawableInterface
             $drawer->include(
                 $object->transformedObject(),
                 $object->matrix,
-                $frame,
+                $relativeFrame,
                 $object->filters,
                 $object->blendMode,
                 $object->name,
