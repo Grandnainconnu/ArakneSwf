@@ -66,12 +66,25 @@ final readonly class Timeline implements DrawableInterface
     #[Override]
     public function framesCount(bool $recursive = false): int
     {
-        // The timeline frame count is simply the number of frames in this timeline.
-        // Nested sprites sync to the global timeline time using modulo, so they
-        // naturally loop back to frame 0 when the parent loops.
-        //
-        // This matches what JPEXS and Flash Player show as the sprite's frame count.
-        return count($this->frames);
+        $ownFrameCount = count($this->frames);
+
+        if (!$recursive) {
+            return $ownFrameCount;
+        }
+
+        // When recursive, find the maximum frame count across all frames
+        // This accounts for nested sprites that may have their own animations
+        $maxNestedCount = 0;
+
+        foreach ($this->frames as $frame) {
+            $frameCount = $frame->framesCount(true);
+            if ($frameCount > $maxNestedCount) {
+                $maxNestedCount = $frameCount;
+            }
+        }
+
+        // Return the max of our own frame count and the nested frame counts
+        return max($ownFrameCount, $maxNestedCount);
     }
 
     #[Override]
